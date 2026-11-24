@@ -1,73 +1,189 @@
-from typing import List, Optional, Callable
+"""Mock of Live.Track"""
 
-from .parameter import Device, Parameter
-from .clip import Clip
+from typing import TYPE_CHECKING, Callable, Optional
+from .base import LomObject, Vector
+from .clip_slot import ClipSlot
+from .device import Device
+
+if TYPE_CHECKING:
+    from .song import Song
 
 
-class Track:
-    """Mock of an Ableton Live track."""
+class DeviceContainer(LomObject):
+    """Base class for objects that can contain devices"""
+    pass
 
-    def __init__(self, name: str = "Track", track_id: int = 0):
-        self.name = name
-        self._track_id = track_id
-        self.mute: bool = False
-        self.solo: bool = False
-        self.arm: bool = False
-        self.devices: List[Device] = []
-        self.clips: List[Clip] = []
-        self.current_clip_index: int = 0
-        self._listeners: List[Callable[[], None]] = []
-        self._parameter_listeners: List[Callable[[str, float], None]] = []
 
-    def add_device(self, device: Device) -> None:
-        """Add a device to this track."""
-        self.devices.append(device)
+class Track(DeviceContainer):
+    """Mock of Live.Track"""
 
-    def remove_device(self, device: Device) -> None:
-        """Remove a device from this track."""
-        if device in self.devices:
-            self.devices.remove(device)
+    class View(LomObject):
+        """Track view"""
 
-    def get_device(self, index: int) -> Optional[Device]:
-        """Get device by index."""
-        if 0 <= index < len(self.devices):
-            return self.devices[index]
-        return None
+        def __init__(self, track: 'Track'):
+            super().__init__()
+            self._track = track
+            self._is_collapsed = False
+            self._selected_device: Optional[Device] = None
 
-    def add_clip(self, clip: Clip) -> None:
-        """Add a clip to this track."""
-        self.clips.append(clip)
+        @property
+        def canonical_parent(self) -> 'Track':
+            return self._track
 
-    def remove_clip(self, clip: Clip) -> None:
-        """Remove a clip from this track."""
-        if clip in self.clips:
-            self.clips.remove(clip)
+        @property
+        def is_collapsed(self) -> bool:
+            return self._is_collapsed
 
-    def get_clip(self, index: int) -> Optional[Clip]:
-        """Get clip by index."""
-        if 0 <= index < len(self.clips):
-            return self.clips[index]
-        return None
+        @is_collapsed.setter
+        def is_collapsed(self, val: bool) -> None:
+            self._is_collapsed = val
+            self._notify_listeners("is_collapsed")
 
-    def get_parameter(self, name: str) -> Optional[Parameter]:
-        """Get a parameter by name from this track's mixer device."""
-        # In Ableton, tracks have volume, pan, etc. as mixer parameters
-        # This is a simplified version
-        return None
+        def add_is_collapsed_listener(self, callback: Callable[[], None]) -> None:
+            self._add_listener("is_collapsed", callback)
 
-    def add_listener(self, callback: Callable[[], None]) -> None:
-        """Register a callback for track changes."""
-        self._listeners.append(callback)
+        def remove_is_collapsed_listener(self, callback: Callable[[], None]) -> None:
+            self._remove_listener("is_collapsed", callback)
 
-    def remove_listener(self, callback: Callable[[], None]) -> None:
-        """Unregister a callback."""
-        if callback in self._listeners:
-            self._listeners.remove(callback)
+        def is_collapsed_has_listener(self, callback: Callable[[], None]) -> bool:
+            return self._has_listener("is_collapsed", callback)
 
-    def _notify_listeners(self) -> None:
-        """Notify all listeners of changes."""
-        for callback in self._listeners:
-            try:
-                callback()
-            except Exception:
-                pass
+        @property
+        def selected_device(self) -> Optional[Device]:
+            return self._selected_device
+
+        @selected_device.setter
+        def selected_device(self, device: Optional[Device]) -> None:
+            self._selected_device = device
+            self._notify_listeners("selected_device")
+
+        def add_selected_device_listener(self, callback: Callable[[], None]) -> None:
+            self._add_listener("selected_device", callback)
+
+        def remove_selected_device_listener(self, callback: Callable[[], None]) -> None:
+            self._remove_listener("selected_device", callback)
+
+        def selected_device_has_listener(self, callback: Callable[[], None]) -> bool:
+            return self._has_listener("selected_device", callback)
+
+    def __init__(self, name: str = "Track", parent: Optional['Song'] = None, index: int = 0):
+        super().__init__()
+        self._name = name
+        self._parent = parent
+        self._index = index
+        self._mute = False
+        self._solo = False
+        self._arm = False
+        self._devices: Vector[Device] = Vector()
+        self._clip_slots: Vector[ClipSlot] = Vector()
+        self.view = self.View(self)
+
+    @property
+    def canonical_parent(self) -> Optional['Song']:
+        return self._parent
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @name.setter
+    def name(self, val: str) -> None:
+        self._name = val
+        self._notify_listeners("name")
+
+    def add_name_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("name", callback)
+
+    def remove_name_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("name", callback)
+
+    def name_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("name", callback)
+
+    @property
+    def mute(self) -> bool:
+        return self._mute
+
+    @mute.setter
+    def mute(self, val: bool) -> None:
+        self._mute = val
+        self._notify_listeners("mute")
+
+    def add_mute_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("mute", callback)
+
+    def remove_mute_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("mute", callback)
+
+    def mute_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("mute", callback)
+
+    @property
+    def solo(self) -> bool:
+        return self._solo
+
+    @solo.setter
+    def solo(self, val: bool) -> None:
+        self._solo = val
+        self._notify_listeners("solo")
+
+    def add_solo_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("solo", callback)
+
+    def remove_solo_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("solo", callback)
+
+    def solo_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("solo", callback)
+
+    @property
+    def arm(self) -> bool:
+        return self._arm
+
+    @arm.setter
+    def arm(self, val: bool) -> None:
+        self._arm = val
+        self._notify_listeners("arm")
+
+    def add_arm_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("arm", callback)
+
+    def remove_arm_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("arm", callback)
+
+    def arm_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("arm", callback)
+
+    @property
+    def devices(self) -> Vector[Device]:
+        return self._devices
+
+    def add_devices_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("devices", callback)
+
+    def remove_devices_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("devices", callback)
+
+    def devices_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("devices", callback)
+
+    def insert_device(self, device: Device, index: int = -1) -> None:
+        """Insert a device at the specified index"""
+        if index < 0 or index >= len(self._devices):
+            self._devices.append(device)
+        else:
+            self._devices._items.insert(index, device)
+        self._notify_listeners("devices")
+
+    @property
+    def clip_slots(self) -> Vector[ClipSlot]:
+        return self._clip_slots
+
+    def add_clip_slots_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("clip_slots", callback)
+
+    def remove_clip_slots_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("clip_slots", callback)
+
+    def clip_slots_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("clip_slots", callback)

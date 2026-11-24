@@ -1,3 +1,1 @@
-"""
-Tests for the live module.
-"""
+"""Live API Mock Tests"""

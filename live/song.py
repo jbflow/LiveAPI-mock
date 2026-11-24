@@ -1,143 +1,207 @@
-from typing import List, Optional, Callable, Tuple
+"""Mock of Live.Song"""
 
+from typing import Callable, Optional
+from .base import LomObject, Vector
 from .track import Track
 from .scene import Scene
+from .clip import Clip
+from .clip_slot import ClipSlot
 
 
-class Song:
-    """Mock of an Ableton Live song (set)."""
+class Song(LomObject):
+    """Mock of Live.Song"""
+
+    class View(LomObject):
+        """Song view"""
+
+        def __init__(self, song: 'Song'):
+            super().__init__()
+            self._song = song
+            self._detail_clip: Optional[Clip] = None
+            self._follow_song = True
+            self._draw_mode = False
+
+        @property
+        def canonical_parent(self) -> 'Song':
+            return self._song
+
+        @property
+        def detail_clip(self) -> Optional[Clip]:
+            return self._detail_clip
+
+        @detail_clip.setter
+        def detail_clip(self, clip: Optional[Clip]) -> None:
+            self._detail_clip = clip
+            self._notify_listeners("detail_clip")
+
+        def add_detail_clip_listener(self, callback: Callable[[], None]) -> None:
+            self._add_listener("detail_clip", callback)
+
+        def remove_detail_clip_listener(self, callback: Callable[[], None]) -> None:
+            self._remove_listener("detail_clip", callback)
+
+        def detail_clip_has_listener(self, callback: Callable[[], None]) -> bool:
+            return self._has_listener("detail_clip", callback)
+
+        @property
+        def follow_song(self) -> bool:
+            return self._follow_song
+
+        @follow_song.setter
+        def follow_song(self, val: bool) -> None:
+            self._follow_song = val
+            self._notify_listeners("follow_song")
+
+        def add_follow_song_listener(self, callback: Callable[[], None]) -> None:
+            self._add_listener("follow_song", callback)
+
+        def remove_follow_song_listener(self, callback: Callable[[], None]) -> None:
+            self._remove_listener("follow_song", callback)
+
+        def follow_song_has_listener(self, callback: Callable[[], None]) -> bool:
+            return self._has_listener("follow_song", callback)
+
+        @property
+        def draw_mode(self) -> bool:
+            return self._draw_mode
+
+        @draw_mode.setter
+        def draw_mode(self, val: bool) -> None:
+            self._draw_mode = val
+            self._notify_listeners("draw_mode")
+
+        def add_draw_mode_listener(self, callback: Callable[[], None]) -> None:
+            self._add_listener("draw_mode", callback)
+
+        def remove_draw_mode_listener(self, callback: Callable[[], None]) -> None:
+            self._remove_listener("draw_mode", callback)
+
+        def draw_mode_has_listener(self, callback: Callable[[], None]) -> bool:
+            return self._has_listener("draw_mode", callback)
 
     def __init__(self):
-        self.is_playing: bool = False
-        self.tempo: float = 120.0
-        self.current_song_time: float = 0.0
-        self.tracks: List[Track] = []
-        self.scenes: List[Scene] = []
-        self._undo_stack: List[str] = []
-        self._redo_stack: List[str] = []
-        self._listeners: List[Callable[[], None]] = []
-        self._call_log: List[Tuple[str, tuple, dict]] = []
+        super().__init__()
+        self._is_playing = False
+        self._tempo = 120.0
+        self._current_song_time = 0.0
+        self._tracks: Vector[Track] = Vector()
+        self._scenes: Vector[Scene] = Vector()
+        self.view = self.View(self)
 
-    def create_track(self, name: str = "Track") -> Track:
-        """Create and add a new track to the song."""
-        track_id = len(self.tracks)
-        track = Track(name, track_id)
-        self.tracks.append(track)
-        self._log_call("create_track", (name,), {})
+    @property
+    def is_playing(self) -> bool:
+        return self._is_playing
+
+    @is_playing.setter
+    def is_playing(self, val: bool) -> None:
+        self._is_playing = val
+        self._notify_listeners("is_playing")
+
+    def add_is_playing_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("is_playing", callback)
+
+    def remove_is_playing_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("is_playing", callback)
+
+    def is_playing_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("is_playing", callback)
+
+    @property
+    def tempo(self) -> float:
+        return self._tempo
+
+    @tempo.setter
+    def tempo(self, val: float) -> None:
+        self._tempo = val
+        self._notify_listeners("tempo")
+
+    def add_tempo_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("tempo", callback)
+
+    def remove_tempo_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("tempo", callback)
+
+    def tempo_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("tempo", callback)
+
+    @property
+    def current_song_time(self) -> float:
+        return self._current_song_time
+
+    @property
+    def tracks(self) -> Vector[Track]:
+        return self._tracks
+
+    def add_tracks_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("tracks", callback)
+
+    def remove_tracks_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("tracks", callback)
+
+    def tracks_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("tracks", callback)
+
+    def create_track(self, index: int = -1) -> Track:
+        """Create a new track"""
+        track = Track(f"Track {len(self._tracks)}", parent=self, index=len(self._tracks))
+        # Add clip slots for each scene
+        for _ in self._scenes:
+            track.clip_slots.append(ClipSlot(track, len(track.clip_slots)))
+        if index < 0 or index >= len(self._tracks):
+            self._tracks.append(track)
+        else:
+            self._tracks._items.insert(index, track)
+        self._notify_listeners("tracks")
         return track
 
-    def add_track(self, track: Track) -> None:
-        """Add a track to the song."""
-        self.tracks.append(track)
-        self._log_call("add_track", (track.name,), {})
+    @property
+    def scenes(self) -> Vector[Scene]:
+        return self._scenes
 
-    def remove_track(self, track: Track) -> None:
-        """Remove a track from the song."""
-        if track in self.tracks:
-            self.tracks.remove(track)
-            self._log_call("remove_track", (track.name,), {})
+    def add_scenes_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("scenes", callback)
 
-    def get_track(self, index: int) -> Optional[Track]:
-        """Get track by index."""
-        if 0 <= index < len(self.tracks):
-            return self.tracks[index]
-        return None
+    def remove_scenes_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("scenes", callback)
 
-    def create_scene(self, name: str = "Scene") -> Scene:
-        """Create and add a new scene to the song."""
-        scene_id = len(self.scenes)
-        scene = Scene(name, scene_id)
-        self.scenes.append(scene)
-        self._log_call("create_scene", (name,), {})
+    def scenes_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("scenes", callback)
+
+    def create_scene(self, index: int = -1) -> Scene:
+        """Create a new scene"""
+        scene = Scene(f"Scene {len(self._scenes)}", parent=self, index=len(self._scenes))
+        # Add a clip slot for each track
+        for track in self._tracks:
+            track.clip_slots.append(ClipSlot(track, len(track.clip_slots)))
+            scene.clip_slots.append(track.clip_slots[-1])
+        if index < 0 or index >= len(self._scenes):
+            self._scenes.append(scene)
+        else:
+            self._scenes._items.insert(index, scene)
+        self._notify_listeners("scenes")
         return scene
 
-    def add_scene(self, scene: Scene) -> None:
-        """Add a scene to the song."""
-        self.scenes.append(scene)
-        self._log_call("add_scene", (scene.name,), {})
-
-    def get_scene(self, index: int) -> Optional[Scene]:
-        """Get scene by index."""
-        if 0 <= index < len(self.scenes):
-            return self.scenes[index]
-        return None
-
     def play(self) -> None:
-        """Start playing the song."""
+        """Start playback"""
         self.is_playing = True
-        self._undo_stack.append("play")
-        self._redo_stack.clear()
-        self._log_call("play", (), {})
-        self._notify_listeners()
 
     def stop(self) -> None:
-        """Stop playing the song."""
+        """Stop playback"""
         self.is_playing = False
-        self._undo_stack.append("stop")
-        self._redo_stack.clear()
-        self._log_call("stop", (), {})
-        self._notify_listeners()
-
-    def set_tempo(self, tempo: float) -> None:
-        """Set the song tempo in BPM."""
-        self.tempo = tempo
-        self._undo_stack.append(f"set_tempo:{tempo}")
-        self._redo_stack.clear()
-        self._log_call("set_tempo", (tempo,), {})
-        self._notify_listeners()
 
     def undo(self) -> None:
-        """Undo the last action."""
-        if self._undo_stack:
-            action = self._undo_stack.pop()
-            self._redo_stack.append(action)
-            self._log_call("undo", (), {})
-            self._notify_listeners()
+        """Undo last action"""
+        pass
 
     def redo(self) -> None:
-        """Redo the last undone action."""
-        if self._redo_stack:
-            action = self._redo_stack.pop()
-            self._undo_stack.append(action)
-            self._log_call("redo", (), {})
-            self._notify_listeners()
-
-    def add_listener(self, callback: Callable[[], None]) -> None:
-        """Register a callback for song changes."""
-        self._listeners.append(callback)
-
-    def remove_listener(self, callback: Callable[[], None]) -> None:
-        """Unregister a callback."""
-        if callback in self._listeners:
-            self._listeners.remove(callback)
-
-    def _notify_listeners(self) -> None:
-        """Notify all listeners of changes."""
-        for callback in self._listeners:
-            try:
-                callback()
-            except Exception:
-                pass
-
-    def _log_call(self, method_name: str, args: tuple, kwargs: dict) -> None:
-        """Log an API call for testing."""
-        self._call_log.append((method_name, args, kwargs))
-
-    def get_call_log(self) -> List[Tuple[str, tuple, dict]]:
-        """Get the call log for test assertions."""
-        return self._call_log.copy()
-
-    def clear_call_log(self) -> None:
-        """Clear the call log."""
-        self._call_log.clear()
+        """Redo last undone action"""
+        pass
 
     def reset(self) -> None:
-        """Reset the song to initial state."""
-        self.is_playing = False
-        self.tempo = 120.0
-        self.current_song_time = 0.0
-        self.tracks.clear()
-        self.scenes.clear()
-        self._undo_stack.clear()
-        self._redo_stack.clear()
-        self._call_log.clear()
+        """Reset song to initial state"""
+        self._is_playing = False
+        self._tempo = 120.0
+        self._current_song_time = 0.0
+        self._tracks.clear()
+        self._scenes.clear()
+        self._listeners.clear()

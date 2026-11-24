@@ -1,62 +1,154 @@
-from typing import List, Optional, Callable, Any
+"""Mock of Live.Clip"""
+
+from typing import TYPE_CHECKING, Callable, Optional
+from .base import LomObject, Vector, IntVector
+
+if TYPE_CHECKING:
+    from .clip_slot import ClipSlot
 
 
-class Note:
-    """Mock of an Ableton Live note."""
+class Clip(LomObject):
+    """Mock of Live.Clip"""
 
-    def __init__(
-        self, pitch: int = 60, start_time: float = 0.0, duration: float = 0.5, velocity: int = 100
-    ):
-        self.pitch = pitch
-        self.start_time = start_time
-        self.duration = duration
-        self.velocity = velocity
+    class View(LomObject):
+        """Clip view"""
 
+        def __init__(self, clip: 'Clip'):
+            super().__init__()
+            self._clip = clip
 
-class Clip:
-    """Mock of an Ableton Live clip."""
+        @property
+        def canonical_parent(self) -> 'Clip':
+            return self._clip
 
-    def __init__(self, name: str = "Clip", clip_id: int = 0):
-        self.name = name
-        self._clip_id = clip_id
-        self.notes: List[Note] = []
-        self.loop_start: float = 0.0
-        self.loop_end: float = 4.0
-        self.start_marker: float = 0.0
-        self.end_marker: float = 4.0
-        self.is_audio_clip: bool = False
-        self.is_midi_clip: bool = True
-        self._listeners: List[Callable[[], None]] = []
+        def show_loop(self) -> None:
+            """Show loop in detail view"""
+            pass
 
-    def add_note(
-        self, pitch: int, start_time: float, duration: float, velocity: int = 100
-    ) -> None:
-        """Add a note to this MIDI clip."""
-        if self.is_midi_clip:
-            self.notes.append(Note(pitch, start_time, duration, velocity))
+    def __init__(self, name: str = "Clip", parent: Optional['ClipSlot'] = None):
+        super().__init__()
+        self._name = name
+        self._parent = parent
+        self._is_audio_clip = False
+        self._is_midi_clip = True
+        self._start_marker = 0.0
+        self._end_marker = 4.0
+        self._loop_start = 0.0
+        self._loop_end = 4.0
+        self._loop_length = 4.0
+        self._midi_notes: Vector[tuple] = Vector()  # (pitch, start, duration, velocity)
+        self.view = self.View(self)
 
-    def remove_note(self, note: Note) -> None:
-        """Remove a note from this clip."""
-        if note in self.notes:
-            self.notes.remove(note)
+    @property
+    def canonical_parent(self) -> Optional['ClipSlot']:
+        return self._parent
 
-    def get_notes(self) -> List[Note]:
-        """Get all notes in this clip."""
-        return self.notes.copy()
+    @property
+    def name(self) -> str:
+        return self._name
 
-    def add_listener(self, callback: Callable[[], None]) -> None:
-        """Register a callback for clip changes."""
-        self._listeners.append(callback)
+    @name.setter
+    def name(self, val: str) -> None:
+        self._name = val
+        self._notify_listeners("name")
 
-    def remove_listener(self, callback: Callable[[], None]) -> None:
-        """Unregister a callback."""
-        if callback in self._listeners:
-            self._listeners.remove(callback)
+    def add_name_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("name", callback)
 
-    def _notify_listeners(self) -> None:
-        """Notify all listeners of changes."""
-        for callback in self._listeners:
-            try:
-                callback()
-            except Exception:
-                pass
+    def remove_name_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("name", callback)
+
+    def name_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("name", callback)
+
+    @property
+    def is_audio_clip(self) -> bool:
+        return self._is_audio_clip
+
+    @property
+    def is_midi_clip(self) -> bool:
+        return self._is_midi_clip
+
+    @property
+    def start_marker(self) -> float:
+        return self._start_marker
+
+    @start_marker.setter
+    def start_marker(self, val: float) -> None:
+        self._start_marker = val
+        self._notify_listeners("start_marker")
+
+    def add_start_marker_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("start_marker", callback)
+
+    def remove_start_marker_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("start_marker", callback)
+
+    def start_marker_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("start_marker", callback)
+
+    @property
+    def end_marker(self) -> float:
+        return self._end_marker
+
+    @end_marker.setter
+    def end_marker(self, val: float) -> None:
+        self._end_marker = val
+        self._notify_listeners("end_marker")
+
+    def add_end_marker_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("end_marker", callback)
+
+    def remove_end_marker_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("end_marker", callback)
+
+    def end_marker_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("end_marker", callback)
+
+    @property
+    def loop_start(self) -> float:
+        return self._loop_start
+
+    @loop_start.setter
+    def loop_start(self, val: float) -> None:
+        self._loop_start = val
+        self._notify_listeners("loop_start")
+
+    def add_loop_start_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("loop_start", callback)
+
+    def remove_loop_start_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("loop_start", callback)
+
+    def loop_start_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("loop_start", callback)
+
+    @property
+    def loop_end(self) -> float:
+        return self._loop_end
+
+    @loop_end.setter
+    def loop_end(self, val: float) -> None:
+        self._loop_end = val
+        self._notify_listeners("loop_end")
+
+    def add_loop_end_listener(self, callback: Callable[[], None]) -> None:
+        self._add_listener("loop_end", callback)
+
+    def remove_loop_end_listener(self, callback: Callable[[], None]) -> None:
+        self._remove_listener("loop_end", callback)
+
+    def loop_end_has_listener(self, callback: Callable[[], None]) -> bool:
+        return self._has_listener("loop_end", callback)
+
+    @property
+    def loop_length(self) -> float:
+        return self._loop_length
+
+    def set_notes(self, notes: IntVector) -> None:
+        """Set notes (pitch, startTime, duration, velocity)"""
+        pass
+
+    def get_notes(self) -> Vector[tuple]:
+        """Get all notes in clip"""
+        return self._midi_notes
