@@ -1,279 +1,59 @@
 # LiveAPI-mock
 
-A mock implementation of the Ableton Live API for offline testing and development.
+An offline mock of Ableton Live's Python API, importable as `Live` exactly like inside Live
+(`import Live`, `Live.Song.Song`, `Live.Base.Timer`). Use it to test remote scripts without Live.
 
-## Overview
+## How it is built
 
-LiveAPI-mock provides Python implementations of core Ableton Live classes without requiring a running Ableton Live instance. This enables:
+* `Live/<Module>.py` is **generated** from the typed stubs in
+  [PhotonicVelocity/LiveAPI](https://github.com/PhotonicVelocity/LiveAPI) (Live 12.3.6):
+  every class, property, setter, `add_/remove_/..._has_listener` triple, method, enum and nested `View`.
+  Regenerate with `scripts/regenerate.sh` (never edit generated files).
+* `Live/_runtime.py`, `Live/_impl.py` are the shared base class and the few hand-written types
+  (`Vector`, `Timer`, `Text`, `BrowserItemIterator`).
+* `Live/_behaviors.py` adds the stateful behaviour: track/scene/clip-slot grid, clips and MIDI notes,
+  devices, the browser tree and `load_item`, transport, undo. Anything without behaviour still exists:
+  properties hold what you set, methods are logged and return a type-appropriate default.
 
-- **Offline testing** of mantra-remote-script functionality
-- **CI/CD integration** without Live dependencies
-- **Rapid prototyping** of Live control logic
-- **Education** about the Live API structure
-
-## Project Structure
-
-```
-LiveAPI-mock/
-├── live/                  # Core mock classes
-│   ├── __init__.py       # Public API
-│   ├── song.py           # Song class
-│   ├── track.py          # Track class
-│   ├── clip.py           # Clip and Note classes
-│   ├── parameter.py      # Parameter and Device classes
-│   ├── scene.py          # Scene class
-│   ├── browser.py        # Browser class
-│   └── session.py        # Session management
-├── tests/                 # Test suite
-│   ├── conftest.py       # Pytest fixtures
-│   ├── test_song.py
-│   ├── test_track.py
-│   ├── test_clip.py
-│   ├── test_device.py
-│   └── test_browser.py
-├── Dockerfile            # Container configuration
-├── requirements.txt      # Python dependencies
-└── setup.py             # Package configuration
-```
-
-## Installation
-
-### Local Development
-
-```bash
-pip install -e .
-pip install -r requirements.txt
-```
-
-### Docker
-
-```bash
-docker build -t mantra-liveapi-mock .
-docker run mantra-liveapi-mock
-```
-
-## Usage
-
-### Basic API Usage
+## Use
 
 ```python
-from live import Song, Track, Clip
+import Live
 
-# Create a song
-song = Song()
+app = Live.Application.get_application()
+song = app.get_document()
+track = song.create_midi_track()
+song.create_scene(-1)
+clip = track.clip_slots[0].create_clip(4.0)
+clip.add_new_notes([Live.Clip.MidiNoteSpecification(60, 0.0, 1.0)])
 
-# Create tracks
-track = song.create_track("Bass")
-song.create_track("Drums")
+item = next(i for i in app.browser.instruments.children if i.name == "Operator")
+app.browser.load_item(item)            # loads onto the selected track
 
-# Add clips
-clip = Clip("My Clip")
-track.add_clip(clip)
+song.add_tempo_listener(lambda: print("tempo", song.tempo))
+song.tempo = 128.0                     # listeners fire on change, as in Live
 
-# Add notes (MIDI)
-clip.add_note(pitch=60, start_time=0.0, duration=0.5, velocity=100)
-
-# Control playback
-song.play()
-song.set_tempo(140.0)
-
-# Inspect state
-print(f"Playing: {song.is_playing}")
-print(f"Tempo: {song.tempo} BPM")
-print(f"Tracks: {len(song.tracks)}")
+Live.call_log                          # [CallRecord(kind, target, name, args, kwargs), ...]
+Live._runtime.calls("create_clip")     # filter by member name
+Live.reset()                           # clear session, call log, undo history (call between tests)
 ```
 
-### Using Session Management
+`Live.Base.Timer` never fires on its own: call `timer.tick()` in tests.
+Add your own browser content with `Live._behaviors.add_browser_item(browser, "instruments", "My Synth")`.
 
-```python
-from live.session import get_song, reset_session
+## Develop
 
-# Get the global song instance
-song = get_song()
-
-# After tests, reset state
-reset_session()
+```
+pip install -e . pytest
+pytest tests                                  # 130 tests
+LIVEAPI_STUBS=<stubs>/12.3.6/Live pytest tests/test_api_surface.py   # every stub member exists
+docker build -t mantra-liveapi-mock . && docker run --rm mantra-liveapi-mock   # Python 3.7
 ```
 
-### Call Logging for Test Assertions
+## Limits
 
-```python
-from live import Song
-
-song = Song()
-song.create_track("Track 1")
-song.play()
-
-# Inspect what API calls were made
-calls = song.get_call_log()
-assert calls[0] == ("create_track", ("Track 1",), {})
-assert calls[1] == ("play", (), {})
-```
-
-### Using with pytest
-
-```python
-import pytest
-from live import Song
-
-def test_my_feature(mock_live_session):
-    """Test that uses the mock Live API."""
-    mock_live_session.create_track("Test Track")
-    assert len(mock_live_session.tracks) == 1
-```
-
-## Supported Classes
-
-### Song
-Main entry point representing an Ableton Live set.
-
-**Methods:**
-- `play()` - Start playback
-- `stop()` - Stop playback
-- `set_tempo(bpm: float)` - Set tempo
-- `create_track(name: str) -> Track` - Create a new track
-- `create_scene(name: str) -> Scene` - Create a new scene
-- `undo()` - Undo the last action
-- `redo()` - Redo the last undone action
-- `get_call_log() -> List` - Get all logged API calls
-- `reset()` - Reset to initial state
-
-**Properties:**
-- `is_playing: bool`
-- `tempo: float`
-- `tracks: List[Track]`
-- `scenes: List[Scene]`
-
-### Track
-Represents an Ableton Live track.
-
-**Methods:**
-- `add_device(device: Device)`
-- `add_clip(clip: Clip)`
-- `get_device(index: int) -> Optional[Device]`
-- `get_clip(index: int) -> Optional[Clip]`
-
-**Properties:**
-- `name: str`
-- `mute: bool`
-- `solo: bool`
-- `arm: bool`
-- `devices: List[Device]`
-- `clips: List[Clip]`
-
-### Clip
-Represents an Ableton Live clip.
-
-**Methods:**
-- `add_note(pitch, start_time, duration, velocity)`
-- `remove_note(note: Note)`
-- `get_notes() -> List[Note]`
-
-**Properties:**
-- `name: str`
-- `notes: List[Note]`
-- `loop_start: float`
-- `loop_end: float`
-- `start_marker: float`
-- `end_marker: float`
-
-### Device
-Represents an Ableton Live device.
-
-**Methods:**
-- `add_parameter(parameter: Parameter)`
-- `get_parameter(index: int) -> Optional[Parameter]`
-
-**Properties:**
-- `name: str`
-- `parameters: List[Parameter]`
-- `chains: List[Any]`
-
-### Parameter
-Represents a device parameter.
-
-**Properties:**
-- `name: str`
-- `value: float`
-- `min: float`
-- `max: float`
-
-**Methods:**
-- `add_value_listener(callback)`
-- `remove_value_listener(callback)`
-
-### Browser
-Device browser for loading devices.
-
-**Methods:**
-- `load_device(device_name: str, track=None) -> Device`
-- `navigate(path: List[str])`
-- `get_current_location() -> List[str]`
-
-### Scene
-Represents an Ableton Live scene.
-
-**Properties:**
-- `name: str`
-- `clip_index: Optional[int]`
-
-## Testing
-
-Run the test suite:
-
-```bash
-pytest tests/ -v
-```
-
-Run with coverage:
-
-```bash
-pytest tests/ --cov=live --cov-report=html
-```
-
-## Integration with mantra-remote-script
-
-LiveAPI-mock is designed to work seamlessly with mantra-remote-script testing:
-
-```python
-# In mantra-remote-script/tests/conftest.py
-from live import Song
-
-@pytest.fixture
-def mock_live_session():
-    song = Song()
-    yield song
-    song.reset()
-
-# In mantra-remote-script/tests/test_something.py
-def test_remote_script_feature(mock_live_session):
-    # Use mock_live_session just like the real Live API
-    track = mock_live_session.create_track("Test")
-    assert track.name == "Test"
-```
-
-## Limitations
-
-This is a mock implementation with the following limitations:
-
-- **No real audio** - audio playback is not simulated
-- **No MIDI routing** - MIDI connections are not modeled
-- **Simplified state** - some internal state is simplified vs. real Live
-- **No serialization** - songs cannot be saved/loaded (for now)
-- **Limited device models** - devices are generic, not modeled after specific Live devices
-
-For integration with real Live, use the official Ableton Live Control Surface API.
-
-## Contributing
-
-To extend LiveAPI-mock:
-
-1. Add new methods/properties to the relevant mock class
-2. Add type hints (Python 3.7+ compatible)
-3. Add comprehensive tests
-4. Update the README
-5. Ensure call logging works for new methods
-
-## License
-
-Part of the Mantra project.
+* Behaviour is hand-written for the common surface only (see `_behaviors.py`); the rest is generic.
+* Undo/redo covers property assignments, not structural edits (creating/deleting tracks, clips, devices).
+* Values are not validated (e.g. out-of-range `DeviceParameter.value`, wrong-kind devices), so a passing
+  test is necessary but not sufficient for real Live.
+* Positional-only parameters (`/` in the stubs) are accepted by keyword too (Python 3.7 has no `/`).
